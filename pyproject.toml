@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netcloak"
+version = "0.1.0"
+description = "Reduce what a local network can passively learn about your device (MAC, hostname, DNS) — cross-platform and reversible."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Majidul Islam" }]
+keywords = ["privacy", "mac-address", "network", "dns", "tor", "wireguard", "anonymity"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Networking",
+    "Topic :: Security",
+]
+dependencies = []
+
+[project.scripts]
+netcloak = "netcloak.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Majidul17068/netcloak"
+Repository = "https://github.com/Majidul17068/netcloak"
+
+[tool.setuptools.packages.find]
+include = ["netcloak*"]

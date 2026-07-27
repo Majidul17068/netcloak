@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# netcloak runtime state (never commit — contains machine-specific backups)
+state.json
+tunnel.json
+torrc
+tor-data/
+*.mobileconfig
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
