@@ -25,7 +25,8 @@ classifiers = [
 dependencies = []
 
 [project.scripts]
-netcloak = "netcloak.cli:main"
+netcloak = "netcloak.app:app_main"
+netcloak-gui = "netcloak.gui:launch"
 
 [project.urls]
 Homepage = "https://github.com/Majidul17068/netcloak"
