@@ -5,4 +5,4 @@ broadcasts (mDNS / LLMNR / NetBIOS) and switches to encrypted DNS -- all on
 YOUR OWN device, and all fully reversible via the saved state file.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
