@@ -7,6 +7,7 @@ the window never freezes, and results are marshalled back with root.after().
 from __future__ import annotations
 
 import os
+import platform
 import threading
 import tkinter as tk
 from tkinter import filedialog, scrolledtext, ttk
@@ -136,6 +137,32 @@ class NetcloakGUI:
             self.tun_var.set("wg")
             self._on_tunnel_change()
 
+    def _stage_conf(self, path):
+        """Copy the picked .conf somewhere the elevated helper can read it.
+
+        macOS blocks root-launched apps from reading Downloads/Desktop/Documents
+        (TCC). We read it here in the normal-user GUI (allowed, with at most a
+        one-time prompt) and copy it to /tmp — not protected — then hand that
+        path to the elevated `tunnel up`. Other OSes read the original directly.
+        """
+        if platform.system() != "Darwin":
+            return path
+        try:
+            with open(path, "r", encoding="utf-8", errors="ignore") as fh:
+                data = fh.read()
+        except OSError as exc:
+            self._log(f"Can't read the selected file: {exc}")
+            return None
+        dest = "/tmp/netcloak-active.conf"
+        try:
+            fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as fh:
+                fh.write(data)
+        except OSError as exc:
+            self._log(f"Can't stage the config: {exc}")
+            return None
+        return dest
+
     # ------------------------------------------------------------------ #
     # status refresh (background)
     # ------------------------------------------------------------------ #
@@ -210,7 +237,10 @@ class NetcloakGUI:
             if not self.wg_path.get():
                 self._log("Select a WireGuard .conf first — click 'Choose .conf file…'.")
                 return
-            args = ["tunnel", "up", "--wg", self.wg_path.get()]
+            staged = self._stage_conf(self.wg_path.get())
+            if not staged:
+                return  # _stage_conf already logged why
+            args = ["tunnel", "up", "--wg", staged]
         else:
             args = ["tunnel", "up", "--tor"]
 
