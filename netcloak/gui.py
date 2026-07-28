@@ -6,6 +6,7 @@ the window never freezes, and results are marshalled back with root.after().
 """
 from __future__ import annotations
 
+import os
 import threading
 import tkinter as tk
 from tkinter import filedialog, scrolledtext, ttk
@@ -76,18 +77,24 @@ class NetcloakGUI:
         tun.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(12, 0))
         self.tun_var = tk.StringVar(value="off")
         for i, (text, val) in enumerate([("Off", "off"), ("Tor", "tor"), ("WireGuard", "wg")]):
-            ttk.Radiobutton(tun, text=text, variable=self.tun_var, value=val).grid(
-                row=0, column=i, sticky="w"
-            )
+            ttk.Radiobutton(
+                tun, text=text, variable=self.tun_var, value=val, command=self._on_tunnel_change
+            ).grid(row=0, column=i, sticky="w")
+
+        # WireGuard-only row — the .conf picker is enabled only when WireGuard is chosen
         self.wg_path = tk.StringVar(value="")
-        ttk.Button(tun, text="Choose .conf", command=self.pick_conf).grid(
-            row=1, column=0, pady=(6, 0), sticky="w"
+        self.conf_btn = ttk.Button(
+            tun, text="Choose .conf file…", command=self.pick_conf, state="disabled"
         )
-        ttk.Label(tun, textvariable=self.wg_path, foreground="#777").grid(
-            row=1, column=1, columnspan=2, sticky="w", padx=(8, 0), pady=(6, 0)
-        )
+        self.conf_btn.grid(row=1, column=0, pady=(6, 0), sticky="w")
+        self.conf_label = ttk.Label(tun, text="", foreground="#777")
+        self.conf_label.grid(row=1, column=1, columnspan=2, sticky="w", padx=(8, 0), pady=(6, 0))
+
         self.apply_btn = ttk.Button(tun, text="Apply tunnel", command=self.apply_tunnel)
-        self.apply_btn.grid(row=2, column=0, columnspan=3, pady=(8, 0))
+        self.apply_btn.grid(row=2, column=0, columnspan=3, pady=(10, 0))
+        ttk.Label(
+            tun, text="Off + Apply stops the tunnel.", foreground="#999"
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(4, 0))
 
         self.log = scrolledtext.ScrolledText(
             frm, height=6, width=54, state="disabled", font=("Menlo", 10)
@@ -108,6 +115,17 @@ class NetcloakGUI:
         for b in (self.cloak_btn, self.restore_btn, self.apply_btn):
             b.configure(state=state)
 
+    def _on_tunnel_change(self):
+        """Enable the .conf picker only for WireGuard; hint what to do next."""
+        is_wg = self.tun_var.get() == "wg"
+        self.conf_btn.configure(state="normal" if is_wg else "disabled")
+        if not is_wg:
+            self.conf_label.configure(text="")
+        elif self.wg_path.get():
+            self.conf_label.configure(text=os.path.basename(self.wg_path.get()))
+        else:
+            self.conf_label.configure(text="← choose your .conf, then click Apply")
+
     def pick_conf(self):
         path = filedialog.askopenfilename(
             title="Select WireGuard config",
@@ -116,6 +134,7 @@ class NetcloakGUI:
         if path:
             self.wg_path.set(path)
             self.tun_var.set("wg")
+            self._on_tunnel_change()
 
     # ------------------------------------------------------------------ #
     # status refresh (background)
@@ -152,6 +171,7 @@ class NetcloakGUI:
         if d["tunnel"]:
             t = load_tunnel()
             self.tun_var.set("wg" if t.get("kind") == "wireguard" else "tor")
+        self._on_tunnel_change()
 
     # ------------------------------------------------------------------ #
     # actions
@@ -181,11 +201,14 @@ class NetcloakGUI:
     def apply_tunnel(self):
         choice = self.tun_var.get()
         if choice == "off":
+            if not has_tunnel():
+                self._log("No tunnel is active.")
+                return
             self._run(["tunnel", "down"], "Tunnel off")
             return
         if choice == "wg":
             if not self.wg_path.get():
-                self._log("Choose a WireGuard .conf file first.")
+                self._log("Select a WireGuard .conf first — click 'Choose .conf file…'.")
                 return
             args = ["tunnel", "up", "--wg", self.wg_path.get()]
         else:
