@@ -7,7 +7,7 @@ the window never freezes, and results are marshalled back with root.after().
 from __future__ import annotations
 
 import os
-import platform
+import tempfile
 import threading
 import tkinter as tk
 from tkinter import filedialog, scrolledtext, ttk
@@ -138,22 +138,21 @@ class NetcloakGUI:
             self._on_tunnel_change()
 
     def _stage_conf(self, path):
-        """Copy the picked .conf somewhere the elevated helper can read it.
+        """Copy the picked .conf to a location the elevated helper can always read.
 
-        macOS blocks root-launched apps from reading Downloads/Desktop/Documents
-        (TCC). We read it here in the normal-user GUI (allowed, with at most a
-        one-time prompt) and copy it to /tmp — not protected — then hand that
-        path to the elevated `tunnel up`. Other OSes read the original directly.
+        Works the same on every OS: read the file here in the normal-user GUI
+        (which is allowed — the file was just picked), then copy it into the OS
+        temp dir before elevating. This sidesteps macOS's block on
+        Downloads/Desktop/Documents for root-launched apps and keeps behaviour
+        uniform on Linux and Windows, so a user can upload a .conf from anywhere.
         """
-        if platform.system() != "Darwin":
-            return path
         try:
             with open(path, "r", encoding="utf-8", errors="ignore") as fh:
                 data = fh.read()
         except OSError as exc:
             self._log(f"Can't read the selected file: {exc}")
             return None
-        dest = "/tmp/netcloak-active.conf"
+        dest = os.path.join(tempfile.gettempdir(), "netcloak-active.conf")
         try:
             fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "w") as fh:
