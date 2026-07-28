@@ -1,0 +1,77 @@
+name: build
+
+# Builds double-click apps for Windows, macOS and Linux.
+# * Push a version tag (v*) -> binaries are attached to a GitHub Release.
+# * Run manually (Actions -> build -> Run workflow) -> binaries as run artifacts.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            pyinstaller_args: "--onefile --name netcloak"
+          - os: macos-latest
+            pyinstaller_args: "--onefile --windowed --name netcloak"
+          - os: windows-latest
+            pyinstaller_args: "--onefile --windowed --name netcloak"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Tk (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3-tk
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build
+        run: >
+          pyinstaller ${{ matrix.pyinstaller_args }}
+          --collect-submodules netcloak --paths .
+          packaging/netcloak_gui.py
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: mv dist/netcloak dist/netcloak-linux
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent dist/netcloak.app dist/netcloak-macos.zip
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: Rename-Item dist/netcloak.exe netcloak-windows.exe
+
+      - name: Upload run artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: netcloak-${{ runner.os }}
+          if-no-files-found: ignore
+          path: |
+            dist/netcloak-linux
+            dist/netcloak-macos.zip
+            dist/netcloak-windows.exe
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/netcloak-linux
+            dist/netcloak-macos.zip
+            dist/netcloak-windows.exe
