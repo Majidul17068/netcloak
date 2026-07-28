@@ -43,12 +43,22 @@ def tool_path(name):
     return name
 
 
+def _found(name):
+    return tool_path(name) != name
+
+
 def _installed(tool):
-    if tool == "wireguard" and platform.system() == "Windows":
-        return which("wireguard") is not None or os.path.exists(
-            r"C:\Program Files\WireGuard\wireguard.exe"
-        )
-    return tool_path(_CHECK[tool]) != _CHECK[tool]
+    system = platform.system()
+    if tool == "wireguard":
+        if system == "Windows":
+            return which("wireguard") is not None or os.path.exists(
+                r"C:\Program Files\WireGuard\wireguard.exe"
+            )
+        if system == "Darwin":
+            # macOS has no in-kernel WireGuard — wg-quick needs the userspace impl
+            return _found("wg-quick") and _found("wireguard-go")
+        return _found("wg-quick")
+    return _found(_CHECK[tool])
 
 
 def ensure(tool):
@@ -85,16 +95,30 @@ def _brew_bin():
 
 
 def _install_mac(tool):
-    pkg = _PKG[tool]["brew"]
     brew = _brew_bin()
     if not brew:
+        pkg = _PKG[tool]["brew"]
         return False, f"Homebrew not installed — install from https://brew.sh, then: brew install {pkg}"
     user = _mac_console_user()
-    cmd = ["sudo", "-u", user, brew, "install", pkg] if (os.geteuid() == 0 and user) else [brew, "install", pkg]
-    rc, out, err = run(cmd, timeout=600)
+
+    def brew_install(pkg):
+        cmd = (
+            ["sudo", "-u", user, brew, "install", pkg]
+            if (os.geteuid() == 0 and user)
+            else [brew, "install", pkg]
+        )
+        return run(cmd, timeout=600)
+
+    if tool == "tor":
+        brew_install("tor")
+    elif tool == "wireguard":
+        brew_install("wireguard-tools")
+        if not _found("wireguard-go"):
+            brew_install("wireguard-go")  # userspace backend wg-quick needs on macOS
+
     if _installed(tool):
-        return True, f"installed {pkg} via Homebrew"
-    return False, (err or out or "brew install failed")[:300]
+        return True, f"installed {tool} via Homebrew"
+    return False, "brew install ran but the tool still isn't found — check Homebrew output"
 
 
 # --------------------------------------------------------------------------- #
@@ -118,9 +142,14 @@ def _install_linux(tool):
         return False, f"no supported package manager found — install {_PKG[tool]['apt']} manually"
     if mgr == "apt":
         run(["apt-get", "update"], timeout=180)
-    rc, out, err = run(install + [_PKG[tool][mgr]], timeout=600)
+    pkgs = [_PKG[tool][mgr]]
+    if tool == "wireguard" and not which("resolvconf"):
+        # wg-quick needs a resolvconf provider to apply the config's DNS= line;
+        # add openresolv only if nothing already provides `resolvconf`.
+        pkgs += {"apt": ["openresolv"], "pacman": ["openresolv"], "zypper": ["openresolv"]}.get(mgr, [])
+    rc, out, err = run(install + pkgs, timeout=600)
     if _installed(tool):
-        return True, f"installed {_PKG[tool][mgr]} via {mgr}"
+        return True, f"installed {'+'.join(pkgs)} via {mgr}"
     return False, (err or out or "install failed")[:300]
 
 

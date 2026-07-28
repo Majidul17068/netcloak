@@ -41,14 +41,38 @@ def wireguard_up(config):
     if not os.path.isfile(cfg):
         return StepResult("WireGuard", "fail", f"config not found: {cfg}"), None
 
+    # accept any provider's config, but confirm it's actually a WireGuard one
+    try:
+        with open(cfg, "r", encoding="utf-8", errors="ignore") as fh:
+            text = fh.read()
+    except OSError as exc:
+        return StepResult("WireGuard", "fail", f"can't read config: {exc}"), None
+    if "[Interface]" not in text or "[Peer]" not in text:
+        return (
+            StepResult(
+                "WireGuard",
+                "fail",
+                "not a WireGuard config (no [Interface]/[Peer]) — pick the "
+                "'WireGuard configuration' .conf, not an OpenVPN/other file",
+            ),
+            None,
+        )
+
     ok, msg = ensure("wireguard")
     if not ok:
         return StepResult("WireGuard", "fail", msg), None
 
     if system in ("Linux", "Darwin"):
-        rc, out, e = run([tool_path("wg-quick"), "up", cfg], timeout=45)
+        if system == "Darwin":  # let wg-quick find Homebrew's wireguard-go under root's PATH
+            os.environ["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + os.environ.get("PATH", "")
+        else:  # elevated PATH can be minimal — make sure wg-quick/resolvconf resolve
+            os.environ["PATH"] = os.environ.get("PATH", "") + ":/usr/bin:/usr/sbin:/bin:/sbin"
+        rc, out, e = run([tool_path("wg-quick"), "up", cfg], timeout=60)
         if rc != 0:
-            return StepResult("WireGuard", "fail", e or out or "wg-quick failed"), None
+            detail = (e or out or "wg-quick failed").strip()
+            if "resolvconf" in detail.lower():
+                detail += " — install 'openresolv' so wg-quick can set the VPN's DNS"
+            return StepResult("WireGuard", "fail", detail[:300]), None
         return (
             StepResult("WireGuard", "ok", f"up ({os.path.basename(cfg)}) — all traffic tunnelled"),
             {"kind": "wireguard", "system": system, "config": cfg},
@@ -73,7 +97,11 @@ def wireguard_up(config):
 def wireguard_down(state):
     system = state.get("system") or platform.system()
     if system in ("Linux", "Darwin"):
-        rc, out, e = run([tool_path("wg-quick"), "down", state["config"]], timeout=45)
+        if system == "Darwin":
+            os.environ["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + os.environ.get("PATH", "")
+        else:
+            os.environ["PATH"] = os.environ.get("PATH", "") + ":/usr/bin:/usr/sbin:/bin:/sbin"
+        rc, out, e = run([tool_path("wg-quick"), "down", state["config"]], timeout=60)
         return StepResult("WireGuard", "ok" if rc == 0 else "fail", "down" if rc == 0 else (e or out))
     if system == "Windows":
         exe = _wireguard_exe()
