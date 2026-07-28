@@ -15,6 +15,7 @@ import platform
 
 from .backends import get_backend
 from .backends.base import StepResult
+from .deps import ensure, tool_path
 from .util import kill, powershell, run, spawn, which
 from .state import state_dir
 
@@ -40,11 +41,12 @@ def wireguard_up(config):
     if not os.path.isfile(cfg):
         return StepResult("WireGuard", "fail", f"config not found: {cfg}"), None
 
+    ok, msg = ensure("wireguard")
+    if not ok:
+        return StepResult("WireGuard", "fail", msg), None
+
     if system in ("Linux", "Darwin"):
-        if not which("wg-quick"):
-            hint = "brew install wireguard-tools" if system == "Darwin" else "apt install wireguard-tools"
-            return StepResult("WireGuard", "fail", f"wg-quick missing — {hint}"), None
-        rc, out, e = run(["wg-quick", "up", cfg], timeout=45)
+        rc, out, e = run([tool_path("wg-quick"), "up", cfg], timeout=45)
         if rc != 0:
             return StepResult("WireGuard", "fail", e or out or "wg-quick failed"), None
         return (
@@ -71,7 +73,7 @@ def wireguard_up(config):
 def wireguard_down(state):
     system = state.get("system") or platform.system()
     if system in ("Linux", "Darwin"):
-        rc, out, e = run(["wg-quick", "down", state["config"]], timeout=45)
+        rc, out, e = run([tool_path("wg-quick"), "down", state["config"]], timeout=45)
         return StepResult("WireGuard", "ok" if rc == 0 else "fail", "down" if rc == 0 else (e or out))
     if system == "Windows":
         exe = _wireguard_exe()
@@ -85,13 +87,9 @@ def wireguard_down(state):
 # Tor
 # --------------------------------------------------------------------------- #
 def tor_up():
-    if not which("tor"):
-        hint = {
-            "Darwin": "brew install tor",
-            "Linux": "apt install tor",
-            "Windows": "install the Tor Expert Bundle from torproject.org",
-        }.get(platform.system(), "install tor")
-        return StepResult("Tor", "fail", f"tor not installed — {hint}"), None
+    ok, msg = ensure("tor")
+    if not ok:
+        return StepResult("Tor", "fail", msg), None
 
     data = state_dir() / "tor-data"
     data.mkdir(parents=True, exist_ok=True)
@@ -102,7 +100,7 @@ def tor_up():
         f"AutomapHostsOnResolve 1\n"
         f"DataDirectory {data}\n"
     )
-    pid = spawn(["tor", "-f", str(torrc)])
+    pid = spawn([tool_path("tor"), "-f", str(torrc)])
     proxy = _set_socks_proxy()
     return (
         StepResult(
