@@ -21,6 +21,9 @@ def run(cmd, capture=True, shell=False, timeout=60):
     non-zero exit code or a missing binary -- callers inspect the return code
     so a single failing step never crashes the whole run.
     """
+    extra = {}
+    if os.name == "nt":
+        extra["creationflags"] = 0x08000000  # CREATE_NO_WINDOW — no console flash in GUI
     try:
         proc = subprocess.run(
             cmd,
@@ -28,6 +31,7 @@ def run(cmd, capture=True, shell=False, timeout=60):
             text=True,
             shell=shell,
             timeout=timeout,
+            **extra,
         )
     except FileNotFoundError as exc:
         return 127, "", str(exc)
