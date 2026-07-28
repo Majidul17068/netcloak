@@ -200,7 +200,7 @@ Write-Output ('PREV=' + $prev)
             f"(Get-DnsClientServerAddress -InterfaceAlias '{iface}' "
             "-AddressFamily IPv4).ServerAddresses -join ','"
         )
-        backup = {"iface": iface, "dns": cur.strip()}
+        backup = {"iface": iface, "dns": cur.strip(), "doh_servers": p["v4"]}
         for s in p["v4"]:
             powershell(
                 f"netsh dns add encryption server={s} dohtemplate={p['doh']} "
@@ -223,4 +223,6 @@ Write-Output ('PREV=' + $prev)
             )
         else:
             powershell(f"Set-DnsClientServerAddress -InterfaceAlias '{iface}' -ResetServerAddresses")
+        for s in backup.get("doh_servers", []):  # undo the DoH template registrations
+            powershell(f"netsh dns delete encryption server={s}")
         return StepResult("Encrypted DNS", "ok", f"{iface} DNS restored")

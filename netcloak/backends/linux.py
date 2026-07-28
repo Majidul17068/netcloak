@@ -120,8 +120,13 @@ class LinuxBackend(Backend):
         if not backup:
             return StepResult("Hostname", "fail", "no saved hostname")
         name = backup.get("hostname", "")
+        if not name:
+            # never clobber with an empty hostname — just undo the DHCP change
+            self._nm_send_hostname(True)
+            return StepResult("Hostname", "skip", "no original hostname recorded")
         if which("hostnamectl"):
             run(["hostnamectl", "set-hostname", name])
+            run(["hostnamectl", "set-hostname", "--transient", name])
         else:
             run(["hostname", name])
         self._nm_send_hostname(True)

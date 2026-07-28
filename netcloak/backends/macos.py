@@ -129,22 +129,28 @@ class MacBackend(Backend):
     # ------------------------------------------------------------------ #
     def set_hostname(self, name):
         backup = {}
-        for key in ("ComputerName", "HostName", "LocalHostname"):
+        for key in ("ComputerName", "HostName", "LocalHostName"):
             rc, out, _ = run(["scutil", "--get", key])
             backup[key] = out if rc == 0 else ""
         safe = re.sub(r"[^A-Za-z0-9-]", "-", name)
         run(["scutil", "--set", "ComputerName", name])
         run(["scutil", "--set", "HostName", safe])
-        run(["scutil", "--set", "LocalHostname", safe])
+        run(["scutil", "--set", "LocalHostName", safe])
         return StepResult("Hostname", "ok", f"{backup.get('ComputerName', '?')} → {name}"), backup
 
     def restore_hostname(self, backup):
         if not backup:
             return StepResult("Hostname", "fail", "no saved hostname")
-        for key in ("ComputerName", "HostName", "LocalHostname"):
+        original = backup.get("ComputerName", "") or "Mac"
+        safe_fallback = re.sub(r"[^A-Za-z0-9-]", "-", original)
+        for key in ("ComputerName", "HostName", "LocalHostName"):
             val = backup.get(key, "")
-            if val:
-                run(["scutil", "--set", key, val])
+            if not val:
+                # macOS usually leaves HostName / LocalHostName unset. If we don't
+                # explicitly reset them, our cloak name lingers after Restore, so
+                # fall back to one derived from ComputerName instead of skipping.
+                val = original if key == "ComputerName" else safe_fallback
+            run(["scutil", "--set", key, val])
         return StepResult("Hostname", "ok", "restored")
 
     # ------------------------------------------------------------------ #
