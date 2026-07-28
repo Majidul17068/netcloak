@@ -101,11 +101,20 @@ class NetcloakGUI:
         )
         self.via_tor_chk.grid(row=2, column=0, columnspan=3, sticky="w", pady=(6, 0))
 
+        self.kill_var = tk.BooleanVar(value=False)
+        self.kill_chk = ttk.Checkbutton(
+            tun,
+            text="Kill switch  (block traffic if the VPN drops)",
+            variable=self.kill_var,
+            state="disabled",
+        )
+        self.kill_chk.grid(row=3, column=0, columnspan=3, sticky="w", pady=(2, 0))
+
         self.apply_btn = ttk.Button(tun, text="Apply tunnel", command=self.apply_tunnel)
-        self.apply_btn.grid(row=3, column=0, columnspan=3, pady=(10, 0))
+        self.apply_btn.grid(row=4, column=0, columnspan=3, pady=(10, 0))
         ttk.Label(
-            tun, text="Off + Apply stops the tunnel.", foreground="#999"
-        ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(4, 0))
+            tun, text="Off + Apply stops the tunnel (and lifts the kill switch).", foreground="#999"
+        ).grid(row=5, column=0, columnspan=3, sticky="w", pady=(4, 0))
 
         self.log = scrolledtext.ScrolledText(
             frm, height=6, width=54, state="disabled", font=("Menlo", 10)
@@ -131,6 +140,7 @@ class NetcloakGUI:
         is_wg = self.tun_var.get() == "wg"
         self.conf_btn.configure(state="normal" if is_wg else "disabled")
         self.via_tor_chk.configure(state="normal" if is_wg else "disabled")
+        self.kill_chk.configure(state="normal" if is_wg else "disabled")
         if not is_wg:
             self.conf_label.configure(text="")
         elif self.wg_path.get():
@@ -253,6 +263,8 @@ class NetcloakGUI:
             args = ["tunnel", "up", "--wg", staged]
             if self.via_tor_var.get():
                 args.append("--via-tor")
+            if self.kill_var.get():
+                args.append("--kill-switch")
         else:
             args = ["tunnel", "up", "--tor"]
 

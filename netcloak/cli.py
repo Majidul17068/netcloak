@@ -18,6 +18,7 @@ from .state import (
     save_state,
     save_tunnel,
 )
+from . import killswitch
 from .tunnel import tor_down, tor_up, wireguard_down, wireguard_up
 from .util import (
     DNS_PROVIDERS,
@@ -160,6 +161,9 @@ def cmd_tunnel(be, args):
         if args.via_tor and not args.wg:
             err("--via-tor needs --wg (Tor runs on top of the WireGuard tunnel)")
             sys.exit(1)
+        if args.kill_switch and not args.wg:
+            err("--kill-switch needs --wg")
+            sys.exit(1)
         title("Bringing tunnel up")
 
         if args.tor:
@@ -182,6 +186,11 @@ def cmd_tunnel(be, args):
                     state = {"kind": "wg+tor", "wg": wg_state, "tor": tor_state}
                 else:
                     warn("Tor-over-VPN didn't start; the WireGuard tunnel is still up.")
+            if args.kill_switch:
+                ks_result, ks_backup = killswitch.enable(args.wg)
+                _print(ks_result)
+                if ks_backup is not None:
+                    state["killswitch"] = ks_backup
 
         save_tunnel(state)
         hr()
@@ -197,6 +206,8 @@ def cmd_tunnel(be, args):
             return
         t = load_tunnel()
         title("Bringing tunnel down")
+        if t.get("killswitch"):
+            _print(killswitch.disable(t["killswitch"]))
         kind = t.get("kind")
         if kind == "wg+tor":
             _print(tor_down(t["tor"]))
@@ -247,6 +258,11 @@ def build_parser():
         "--via-tor",
         action="store_true",
         help="with --wg: also run Tor over the WireGuard tunnel (Tor-over-VPN)",
+    )
+    tup.add_argument(
+        "--kill-switch",
+        action="store_true",
+        help="with --wg: block all traffic that isn't going through the VPN",
     )
     tsub.add_parser("down", help="stop the active tunnel")
     tsub.add_parser("status", help="show tunnel state")
