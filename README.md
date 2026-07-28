@@ -4,6 +4,25 @@ Reduce what a local network (router / Wi-Fi admin) can passively learn about
 **your own device** — cross-platform (macOS, Linux, Windows), and fully
 reversible.
 
+## Download & run (no Python needed)
+
+Grab the file for your OS from the
+[**Releases**](https://github.com/Majidul17068/netcloak/releases) page and open
+it — it's a normal desktop app with **Cloak / Restore** buttons and a tunnel
+switch.
+
+| OS | Download | First run |
+|----|----------|-----------|
+| **Windows** | `netcloak-windows.exe` | Double-click. If SmartScreen warns: *More info → Run anyway*. |
+| **macOS** | `netcloak-macos.zip` | Unzip, then **right-click → Open** (unsigned app). If blocked: `xattr -dr com.apple.quarantine netcloak.app`. |
+| **Linux** | `netcloak-linux` | `chmod +x netcloak-linux && ./netcloak-linux` |
+
+When you click **Cloak**, the app asks for your admin password (Windows UAC /
+macOS password / Linux polkit). That prompt is required to change the MAC
+address and cannot be removed — it's the operating system protecting itself.
+
+Prefer the terminal? The same commands work from source:
+
 ```bash
 sudo python3 -m netcloak status        # show current MAC / hostname / DNS
 sudo python3 -m netcloak on            # cloak the active interface
@@ -100,6 +119,9 @@ SOCKS proxy — it also defeats browser fingerprinting, which netcloak does not.
 
 ```
 netcloak/
+├── app.py            # entry: no args → GUI, args → CLI
+├── gui.py            # Tkinter desktop app
+├── elevate.py        # UAC / password / polkit prompt
 ├── cli.py            # on / off / status / interfaces / tunnel
 ├── tunnel.py         # WireGuard + Tor
 ├── state.py          # reversible backups
@@ -107,7 +129,24 @@ netcloak/
 └── backends/
     ├── base.py       # shared interface
     ├── linux.py macos.py windows.py
+packaging/            # PyInstaller entry point
+.github/workflows/    # auto-build Win/Mac/Linux apps
 ```
+
+## Releasing (maintainer)
+
+Binaries are built automatically by GitHub Actions — no build tools needed
+locally. To publish a downloadable set:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The `build` workflow compiles the Windows/macOS/Linux apps and attaches them to
+a GitHub Release. You can also trigger it from the **Actions → build → Run
+workflow** button, which uploads the binaries as run artifacts for testing
+before you tag.
 
 ## Legal / ethics
 
