@@ -155,17 +155,40 @@ def cmd_tunnel(be, args):
             warn("A tunnel is already active. Run `tunnel down` first.")
             sys.exit(1)
         if bool(args.wg) == bool(args.tor):
-            err("Choose exactly one: --wg <config.conf>  or  --tor")
+            err("Choose one base: --wg <config.conf>  or  --tor")
+            sys.exit(1)
+        if args.via_tor and not args.wg:
+            err("--via-tor needs --wg (Tor runs on top of the WireGuard tunnel)")
             sys.exit(1)
         title("Bringing tunnel up")
-        result, state = wireguard_up(args.wg) if args.wg else tor_up()
-        _print(result)
-        if state is not None:
-            save_tunnel(state)
-            hr()
-            ok("Tunnel state saved — run `netcloak tunnel down` to stop.")
+
+        if args.tor:
+            result, state = tor_up()
+            _print(result)
+            if state is None:
+                sys.exit(1)
         else:
-            sys.exit(1)
+            wg_result, wg_state = wireguard_up(args.wg)
+            _print(wg_result)
+            if wg_state is None or wg_result.status != "ok":
+                sys.exit(1)
+            state = wg_state
+            if args.via_tor:
+                # Tor now connects *through* the WireGuard tunnel, so an ISP that
+                # blocks Tor never sees it — and Proton no longer sees destinations.
+                tor_result, tor_state = tor_up()
+                _print(tor_result)
+                if tor_state is not None and tor_result.status == "ok":
+                    state = {"kind": "wg+tor", "wg": wg_state, "tor": tor_state}
+                else:
+                    warn("Tor-over-VPN didn't start; the WireGuard tunnel is still up.")
+
+        save_tunnel(state)
+        hr()
+        ok("Tunnel state saved — run `netcloak tunnel down` to stop.")
+        if state.get("kind") == "wg+tor":
+            info("Tor-over-VPN active: set your browser's SOCKS proxy to 127.0.0.1:9050")
+            info("(or use Tor Browser). Tor needs ~30s to bootstrap.")
         return
 
     if action == "down":
@@ -174,7 +197,14 @@ def cmd_tunnel(be, args):
             return
         t = load_tunnel()
         title("Bringing tunnel down")
-        _print(wireguard_down(t) if t.get("kind") == "wireguard" else tor_down(t))
+        kind = t.get("kind")
+        if kind == "wg+tor":
+            _print(tor_down(t["tor"]))
+            _print(wireguard_down(t["wg"]))
+        elif kind == "wireguard":
+            _print(wireguard_down(t))
+        else:
+            _print(tor_down(t))
         clear_tunnel()
         hr()
         ok("Tunnel stopped.")
@@ -213,6 +243,11 @@ def build_parser():
     tup = tsub.add_parser("up", help="bring a tunnel up")
     tup.add_argument("--wg", metavar="CONFIG", help="path to a WireGuard .conf file")
     tup.add_argument("--tor", action="store_true", help="route through Tor (SOCKS5)")
+    tup.add_argument(
+        "--via-tor",
+        action="store_true",
+        help="with --wg: also run Tor over the WireGuard tunnel (Tor-over-VPN)",
+    )
     tsub.add_parser("down", help="stop the active tunnel")
     tsub.add_parser("status", help="show tunnel state")
     return p
