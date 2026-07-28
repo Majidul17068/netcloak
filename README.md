@@ -110,10 +110,12 @@ sudo python3 -m netcloak tunnel status
 sudo python3 -m netcloak tunnel down             # stop + restore proxy settings
 ```
 
-Requirements: WireGuard needs `wg-quick` (`brew/apt install wireguard-tools`)
-or the WireGuard app on Windows; Tor needs the `tor` daemon (`brew/apt install
-tor`). For the strongest anonymity, prefer the **Tor Browser** over the system
-SOCKS proxy — it also defeats browser fingerprinting, which netcloak does not.
+**Auto-install:** when you apply a tunnel, netcloak installs the runtime it
+needs if it's missing — Tor/WireGuard via Homebrew (macOS), the native package
+manager (Linux), or winget (WireGuard on Windows). Tor on Windows still needs a
+manual install (no reliable package). For the strongest anonymity, prefer the
+**Tor Browser** over the system SOCKS proxy — it also defeats browser
+fingerprinting, which netcloak does not.
 
 ## Project layout
 
